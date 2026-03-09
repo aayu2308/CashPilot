@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Theme Colors */
+  --color-primary: #2563EB;
+  --color-secondary: #38BDF8;
+  --color-bg-light: #F8FAFC;
+  --color-card-light: #FFFFFF;
+  --color-accent-light: #F59E0B;
+  --color-success-light: #22C55E;
+  --color-text-primary-light: #1E293B;
+  --color-text-secondary-light: #64748B;
+
+  /* Legacy aliases for compatibility */
+  --color-accent-blue: #2563EB;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-light text-text-primary-light font-sans antialiased transition-colors duration-300;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card-light border border-slate-200 shadow-sm rounded-2xl transition-all duration-300;
+  }
+  
+  .btn-primary {
+    @apply bg-primary hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 shadow-lg shadow-blue-500/20;
+  }
+}
+
