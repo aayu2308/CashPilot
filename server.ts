@@ -120,6 +120,93 @@ async function startServer() {
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, points: user.points, streak: user.streak } });
   });
 
+  // --- Google OAuth Routes ---
+  app.get("/api/auth/google/url", (req, res) => {
+    const rootUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+    const options = {
+      redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      access_type: "offline",
+      response_type: "code",
+      prompt: "consent",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ].join(" "),
+    };
+
+    const qs = new URLSearchParams(options);
+    res.json({ url: `${rootUrl}?${qs.toString()}` });
+  });
+
+  app.get("/api/auth/google/callback", async (req, res) => {
+    const code = req.query.code as string;
+
+    if (!code) {
+      return res.status(400).send("No code provided");
+    }
+
+    try {
+      // Exchange code for tokens
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID!,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+          redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      const { access_token, id_token } = await tokenResponse.json() as any;
+
+      // Get user info
+      const userResponse = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${access_token}`, {
+        headers: { Authorization: `Bearer ${id_token}` },
+      });
+
+      const googleUser = await userResponse.json() as any;
+
+      if (!googleUser.verified_email) {
+        return res.status(403).send("Google account not verified");
+      }
+
+      // Check if user exists
+      let user = db.prepare("SELECT * FROM users WHERE email = ?").get(googleUser.email) as any;
+
+      if (!user) {
+        // Create user
+        const stmt = db.prepare("INSERT INTO users (email, name) VALUES (?, ?)");
+        const info = stmt.run(googleUser.email, googleUser.name);
+        user = { id: info.lastInsertRowid, email: googleUser.email, name: googleUser.name, points: 0, streak: 0 };
+      }
+
+      const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET);
+
+      // Send success message and close popup
+      res.send(`
+        <html>
+          <body>
+            <script>
+              window.opener.postMessage({ 
+                type: 'OAUTH_AUTH_SUCCESS', 
+                token: '${token}', 
+                user: ${JSON.stringify({ id: user.id, email: user.email, name: user.name, points: user.points, streak: user.streak })} 
+              }, '*');
+              window.close();
+            </script>
+            <p>Authentication successful! You can close this window now.</p>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error("Google OAuth Error:", error);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
   // --- Transaction Routes ---
   app.get("/api/transactions", authenticateToken, (req: any, res) => {
     const transactions = db.prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC").all(req.user.id);

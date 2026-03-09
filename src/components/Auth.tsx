@@ -11,6 +11,43 @@ export default function Auth() {
   const [error, setError] = useState('');
   const { login } = useAuth();
 
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        const { token, user } = event.data;
+        login(token, user);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [login]);
+
+  const handleGoogleLogin = async () => {
+    try {
+      setError('');
+      const res = await fetch('/api/auth/google/url');
+      const { url } = await res.json();
+      
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      window.open(
+        url,
+        'google_login',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+    } catch (err) {
+      setError('Failed to initialize Google login. Please try again.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -127,7 +164,10 @@ export default function Auth() {
           </form>
 
           <div className="mt-8 pt-8 border-t border-slate-200">
-            <button className="w-full py-3 bg-white border border-slate-200 text-text-primary-light font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-slate-50 transition-all text-sm">
+            <button 
+              onClick={handleGoogleLogin}
+              className="w-full py-3 bg-white border border-slate-200 text-text-primary-light font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-slate-50 transition-all text-sm"
+            >
               <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
               Continue with Google
             </button>
